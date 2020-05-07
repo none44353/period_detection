@@ -26,14 +26,14 @@ class bloomfliter{
     bloomfliter(int t, int M) : t(t), M(M) {
         srand(time(NULL));
         for (int k = 0; k < t; ++k) 
-            bobhash[k] = new BOBHash32(rand() % 5000);
+            bobhash[k] = new BOBHash32(rand() % 1000);
         memset(a, 0, sizeof(a));
     }
 
     void insert(const uint64_t& x, const double& key) {
         for (int k = 0; k < t; ++k) {
-            unsigned int H = bobhash[k] -> run((char *)&x, 8);
-            unsigned int pos = H % M;
+            unsigned long long int H = bobhash[k] -> run((char *)&x, 8);
+            unsigned long long int pos = H % M;
 
             a[k * M + pos] = key;
         }
@@ -44,8 +44,8 @@ class bloomfliter{
     double query(const uint64_t& x) {
         double res = inf;
         for (int k = 0; k < t; ++k) {
-            unsigned int H = bobhash[k] -> run((char *)&x, 8);
-            unsigned int pos = H % M;
+            unsigned long long int H = bobhash[k] -> run((char *)&x, 8);
+            unsigned long long int pos = H % M;
 
             res = min(res, a[k * M + pos]);
         }
