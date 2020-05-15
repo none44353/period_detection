@@ -176,8 +176,9 @@ int mem;
 
 int main() {//包含元素个数
     freopen("result.txt", "w", stdout);
-    Alg* durationTimeDetector = new Alg(12800, 10, 0.6); //L * 24 / 1024 = 300KB
-    Alg* intervalDetector = new Alg(12800, 10, 0.6);  //L * 24 / 1024 = 300KB
+    cerr << "150KB" << endl;
+    Alg* durationTimeDetector = new Alg(6400, 10, 0.6); //L * 24 / 1024 = 150KB
+    Alg* intervalDetector = new Alg(6400, 10, 0.6);  //L * 24 / 1024 = 150KB
     bloomfliter* timeStamp = new bloomfliter(2, 64000); //t * M * 8 / 1024 = 100KB
     bloomfliter* startTime = new bloomfliter(2, 64000); //t * M * 8 / 1024 = 100KB
         
