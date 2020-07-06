@@ -25,8 +25,9 @@ class bloomfliter{
   public:
     bloomfliter(int t, int M) : t(t), M(M) {
         srand(time(NULL));
+        int x = 123;
         for (int k = 0; k < t; ++k) 
-            bobhash[k] = new BOBHash32(rand() % 1000);
+            bobhash[k] = new BOBHash32(x + k);
         memset(a, 0, sizeof(a));
     }
 

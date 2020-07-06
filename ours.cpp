@@ -131,8 +131,8 @@ bool check_near(double c, double x) {
     return fabs(x - c) < delta;
 }*/
 
-const double threshold = 15;
-const int P = 20;
+const double threshold = 1;
+const int P = 10;
 
 struct getGT{
     map <uint64_t, double> sum;
@@ -155,8 +155,8 @@ struct getGT{
         if (sum.find(id) == sum.end()) return make_pair(false, -1);
         int n = count[id]; 
         if (n < 10) return make_pair(false, -1);
-        int x = n / P; //去除最大最小10%元素  per = 20%
-        //x = 0;
+        int x = n / P; //去除最大最小P%元素 
+      //  x = 0;
         double s = sum[id], s2 = sum2[id];
   
         set <double> :: iterator it = table[id].begin();
@@ -179,77 +179,12 @@ struct getGT{
     }
 }intervalGT;
 
-struct naive{
-    map <uint64_t, double> sum;
-    map <uint64_t, double> sum2;
-    map <uint64_t, int> count;
-    
-    map <uint64_t, set <double> > tableMn, tableMx;
-
-    void init() {
-        sum.clear();
-        sum2.clear();
-        count.clear();
-
-        tableMn.clear(), tableMx.clear();
-    }
-    void insert(uint64_t id, double key) {
-        if (sum.find(id) == sum.end()) 
-            sum[id] = sum2[id] = count[id] = 0, tableMn[id].clear(), tableMx[id].clear();
-
-        sum[id] += key, sum2[id] += key * key, count[id]++;
-        tableMn[id].insert(key), tableMx[id].insert(key);
-        
-        int n = count[id], sze = tableMn[id].size();
-        if (sze > 100) {
-            set <double> :: iterator it = tableMx[id].begin(); 
-            tableMx[id].erase(it);
-            
-            it = tableMn[id].end();
-            --it;
-            tableMn[id].erase(it);
-        }
-
-        int x = (n - 1) / P, nx = n / P;// x = nx = 0;
-        if (x != nx) {
-            double val;
-            set <double> :: iterator it = tableMn[id].begin();
-            val = *it; 
-            sum[id] -= val, sum2[id] -= val * val;
-            tableMn[id].erase(it);
-            
-            it = tableMx[id].end(); --it;
-            val = *it; 
-            sum[id] -= val, sum2[id] -= val * val;
-            tableMx[id].erase(it);
-        }
-        return;
-    }
-
-    pair <bool, double> query(const uint64_t& id) {
-        if (sum.find(id) == sum.end()) return make_pair(false, -1);
-        int n = count[id]; double s = sum[id], s2 = sum2[id];
-        if (n < 10) return make_pair(false, -1);
-        int x = n / P; x = 0;  n -= x * 2;
-        
-        double mean = s / n;
-        double std2 = (double)s2 / n - mean * mean;
-        double std = sqrt(std2);
-        double res = std / mean;
-
-       // printf("Nquery %llu %d %d %.5lf %.5lf\n", id, n + x * 2, x,  mean, res);
-        if (res <= threshold)
-            return make_pair(true, mean);
-        return make_pair(false, mean);
-    }
-}interval;
 
 map <uint64_t, double> timeStamp;
 map <uint64_t, double> startTime;
 map <uint64_t, int> counter;
 map <uint64_t, pair <bool, double> > intervalAnswer;
 map <uint64_t, bool> check;
-
 
 void GroundTruth() {
     for (int i = 0; i < M; ++i) {
@@ -293,14 +228,16 @@ long double precision[2], recall[2], are[2];
 int cnt;
 
 
-void Naive() {
+void OURS() {
     bloomfliter* ntimeStamp = new bloomfliter(4, 32768); //t * M * 8 / 1024 = 1024KB
     bloomfliter* nstartTime = new bloomfliter(4, 32768); //t * M * 8 / 1024 = 1024KB
+    Alg* intervalDetector = new Alg(6400, 10, 0);  //L * 24 / 1024 = 150KB
 
     for (int i = 0; i < M; ++i) {
         auto e = input[i]; 
 
         uint64_t id = e.first;
+        //if (id != 17213472216328176400ULL) continue;
         double curTime = e.second;
         double lastTime = ntimeStamp -> query(id);
 
@@ -308,7 +245,7 @@ void Naive() {
         else {//新的预测
             double st = nstartTime -> query(id);
 
-            if (counter[id] >= 5) interval.insert(id, curTime - st);
+            if (counter[id] >= 5) intervalDetector -> insert(id, curTime - st);
             counter[id] = 0;
             nstartTime -> insert(id, curTime);
         }
@@ -326,7 +263,7 @@ void Naive() {
         if (check.find(id) != check.end()) continue;
         check[id] = true; ++cnt;
        // printf("Nquery %llu\n", id);
-        pair <bool, double> guess = interval.query(id);
+        pair <bool, double> guess = intervalDetector -> query(id);
         pair <bool, double> result = intervalAnswer[id];
         if (guess.first) {
             precision[1]++;
@@ -341,15 +278,18 @@ void Naive() {
         if (guess.first && result.first) {
             are[1]++;
             are[0] += fabs(guess.second - result.second) / result.second;
+          //  printf("%llu %.6lf %.6lf %.6lf\n", id, guess.second, result.second, fabs(guess.second - result.second));
         }
     }
 }
 
+//17213472216328176400 
+//1006749987763913488 
 int main() {
     for (int i = 0; i < M + 1; ++i) input[i] = Read();
     
     GroundTruth(); puts("calc GT");
-    Naive(); puts("calc Naive");
+    OURS(); puts("calc OURS");
     printf("%d\n", cnt);
     printf("precision %.lf %.6lf\n", (double)precision[1], (double)(precision[0] / precision[1]));
     printf("recall %.lf %.6lf\n", (double)recall[1], (double)(recall[0] / recall[1]));

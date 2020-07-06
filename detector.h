@@ -14,7 +14,8 @@
 using namespace std;
 
 #define MAXL 1000005 
-#define delta 0.01
+#define Range 500
+#define delta 2
 
 class Alg //基于hash表的算法
 {   
@@ -29,15 +30,20 @@ class Alg //基于hash表的算法
   
   public:
     Alg(int L, int LowerBound, double percentage) : L(L), LowerBound(LowerBound), percentage(percentage) { 
-        bobhash = new BOBHash32(rand() % 1000);
+        bobhash = new BOBHash32(123);
         memset(counter, 0, sizeof(counter));
     } 
 
-    bool check_near(double c, double x) {
+   /* bool check_near(double c, double x) {
         return fabs(x - c) < delta;
+    }*/
+    bool check_near(double c, double x) {
+        if (fabs(x - c) > Range * 2) return false;
+        return fabs(x - c) < delta * max(fabs(c), 0.001);
     }
 
     void insert(const uint64_t& s, const double& x) { //丢一个元素进来
+       // printf("insert %.6lf\n", x);
         unsigned long long int H = bobhash -> run((char *)&s, 8);
         unsigned long long int pos = H % L;
         
@@ -48,7 +54,7 @@ class Alg //基于hash表的算法
             ++counter[pos][0];
         }
         else --counter[pos][0];
-        
+
         ++counter[pos][1];
 
         return;
