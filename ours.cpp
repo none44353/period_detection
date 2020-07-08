@@ -131,6 +131,12 @@ bool check_near(double c, double x) {
     return fabs(x - c) < delta;
 }*/
 
+
+bool check_near(double c, double x) {
+    if (fabs(x - c) > Range * 2) return false;
+    return fabs(x - c) < delta * max(fabs(c), 0.001);
+}
+
 const double threshold = 1;
 const int P = 10;
 
@@ -165,18 +171,33 @@ struct getGT{
         set <double> :: reverse_iterator rit = table[id].rbegin();
         for (int i = 0; i < x; ++i)
             --n, s -= *rit,s2 -= (*it) * (*it), ++rit;
+
+        double mn = *it, mx = *rit;
         
         double mean = s / n;
+        /*
         double std2 = (double)s2 / n - mean * mean;
         double std = sqrt(std2);
-        double res = std / mean;
+        double res = std / mean;*/
 
        // printf("query %llu %d %.5lf %.5lf\n", id, n, mean, res);
 
-        if (res <= threshold)
-            return make_pair(true, mean);
+        //if (res <= threshold)
+          //  return make_pair(true, mean);
+
+        if (check_near(mean, mn) && check_near(mean, mx))
+            return make_pair(true, mean); 
         return make_pair(false, mean);
     }
+
+    double queryPercentage(const uint64_t& id, double c) {
+        set <double> :: iterator it = table[id].begin();
+        int cnt = 0;
+        for (; it != table[id].end(); ++it)
+            if (check_near(c, *it)) ++cnt;
+        return (double)cnt / count[id];     
+    }
+
 }intervalGT;
 
 
@@ -231,7 +252,7 @@ int cnt;
 void OURS() {
     bloomfliter* ntimeStamp = new bloomfliter(4, 32768); //t * M * 8 / 1024 = 1024KB
     bloomfliter* nstartTime = new bloomfliter(4, 32768); //t * M * 8 / 1024 = 1024KB
-    Alg* intervalDetector = new Alg(6400, 10, 0);  //L * 24 / 1024 = 150KB
+    Alg* intervalDetector = new Alg(6400, 10, 0.6);  //L * 24 / 1024 = 150KB
 
     for (int i = 0; i < M; ++i) {
         auto e = input[i]; 
@@ -256,6 +277,7 @@ void OURS() {
     }
 
     check.clear();
+    int Mp = 0, Lp = 0, ChosenA_Mp = 0, ChosenA_Lp = 0, ChosenB_Mp = 0, ChosenB_Lp = 0, ChosenC_Mp = 0, ChosenC_Lp = 0;
     for (int i = 0; i < M; ++i){
         auto e = input[i]; 
         uint64_t id = e.first;
@@ -280,7 +302,29 @@ void OURS() {
             are[0] += fabs(guess.second - result.second) / result.second;
           //  printf("%llu %.6lf %.6lf %.6lf\n", id, guess.second, result.second, fabs(guess.second - result.second));
         }
+
+        double p_ours = intervalGT.queryPercentage(id, guess.second);
+        double p_GT = intervalGT.queryPercentage(id, result.second);
+        if (p_ours >= p_GT) ++Mp;
+        else ++Lp;
+        if (guess.first) {
+            if (p_ours >= p_GT) ++ChosenA_Mp;
+            else ++ChosenA_Lp;
+        }
+        if (result.first) {
+            if (p_ours >= p_GT) ++ChosenB_Mp;
+            else ++ChosenB_Lp;
+        }
+        if (guess.first || result.first) {
+            if (p_ours >= p_GT) ++ChosenC_Mp;
+            else ++ChosenC_Lp;
+        }
     }
+    printf("all %d %d %.6lf\n", Mp, Lp, (double)Mp / (Mp + Lp));
+    printf("A:  %d %d %.6lf\n", ChosenA_Mp, ChosenA_Lp, (double)ChosenA_Mp / (ChosenA_Mp + ChosenA_Lp));
+    printf("B:  %d %d %.6lf\n", ChosenB_Mp, ChosenB_Lp, (double)ChosenB_Mp / (ChosenB_Mp + ChosenB_Lp));
+    printf("C:  %d %d %.6lf\n", ChosenC_Mp, ChosenC_Lp, (double)ChosenC_Mp / (ChosenC_Mp + ChosenC_Lp));
+
 }
 
 //17213472216328176400 

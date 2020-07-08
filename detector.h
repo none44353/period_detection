@@ -15,7 +15,7 @@ using namespace std;
 
 #define MAXL 1000005 
 #define Range 500
-#define delta 2
+#define delta 1
 
 class Alg //基于hash表的算法
 {   
