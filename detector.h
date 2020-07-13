@@ -14,8 +14,6 @@
 using namespace std;
 
 #define MAXL 1000005 
-#define Range 500
-#define delta 1
 
 class Alg //基于hash表的算法
 {   
@@ -34,9 +32,6 @@ class Alg //基于hash表的算法
         memset(counter, 0, sizeof(counter));
     } 
 
-   /* bool check_near(double c, double x) {
-        return fabs(x - c) < delta;
-    }*/
     bool check_near(double c, double x) {
         if (fabs(x - c) > Range * 2) return false;
         return fabs(x - c) < delta * max(fabs(c), 0.001);

@@ -12,7 +12,7 @@
 
 using namespace std;
 
-#define T 6
+#define T 20
 #define MAXM 500005
 #define MAXL 1000005 
 const double inf = 1e300;

@@ -14,11 +14,16 @@
 
 using namespace std;
 
+#define Range 500
+#define delta 1
+
 #include "ssummary.h"
 #include "BF.h"
 #include "detector.h"
+#include "detectorHG.h"
 
 //string datapath[60] = {"./130000.dat"};
+
 
 string datapath[60] = {"../../usr/share/dataset/CAIDA2018/dataset/130000.dat",
                 "../../usr/share/dataset/CAIDA2018/dataset/130100.dat",
@@ -125,12 +130,6 @@ pair <uint64_t, double> Read()//新CAIDA
 }
 
 pair <uint64_t, double> input[M + 7];
-/*
-#define delta 0.01
-bool check_near(double c, double x) {
-    return fabs(x - c) < delta;
-}*/
-
 
 bool check_near(double c, double x) {
     if (fabs(x - c) > Range * 2) return false;
@@ -252,7 +251,8 @@ int cnt;
 void OURS() {
     bloomfliter* ntimeStamp = new bloomfliter(4, 32768); //t * M * 8 / 1024 = 1024KB
     bloomfliter* nstartTime = new bloomfliter(4, 32768); //t * M * 8 / 1024 = 1024KB
-    Alg* intervalDetector = new Alg(6400, 10, 0.6);  //L * 24 / 1024 = 150KB
+    Alg* intervalDetector = new Alg(6400, 10, 0.2);  //L * 24 / 1024 = 150KB
+    AlgHG* HGDetector = new AlgHG(4, 1600, 10, 0.2);  //L * 24 / 1024 = 150KB
 
     for (int i = 0; i < M; ++i) {
         auto e = input[i]; 
@@ -267,6 +267,7 @@ void OURS() {
             double st = nstartTime -> query(id);
 
             if (counter[id] >= 5) intervalDetector -> insert(id, curTime - st);
+            if (counter[id] >= 5) HGDetector -> insert(id, curTime - st);
             counter[id] = 0;
             nstartTime -> insert(id, curTime);
         }
@@ -277,15 +278,16 @@ void OURS() {
     }
 
     check.clear();
-    int Mp = 0, Lp = 0, ChosenA_Mp = 0, ChosenA_Lp = 0, ChosenB_Mp = 0, ChosenB_Lp = 0, ChosenC_Mp = 0, ChosenC_Lp = 0;
+    int Mp = 0, Lp = 0;
+    int pre = 0, are_n = 0;
+    double are_sum = 0;
     for (int i = 0; i < M; ++i){
         auto e = input[i]; 
         uint64_t id = e.first;
         
         if (check.find(id) != check.end()) continue;
         check[id] = true; ++cnt;
-       // printf("Nquery %llu\n", id);
-        pair <bool, double> guess = intervalDetector -> query(id);
+        pair <bool, double> guess = HGDetector -> query(id);
         pair <bool, double> result = intervalAnswer[id];
         if (guess.first) {
             precision[1]++;
@@ -300,31 +302,20 @@ void OURS() {
         if (guess.first && result.first) {
             are[1]++;
             are[0] += fabs(guess.second - result.second) / result.second;
-          //  printf("%llu %.6lf %.6lf %.6lf\n", id, guess.second, result.second, fabs(guess.second - result.second));
         }
 
+        if (!guess.first) continue;
         double p_ours = intervalGT.queryPercentage(id, guess.second);
         double p_GT = intervalGT.queryPercentage(id, result.second);
         if (p_ours >= p_GT) ++Mp;
         else ++Lp;
-        if (guess.first) {
-            if (p_ours >= p_GT) ++ChosenA_Mp;
-            else ++ChosenA_Lp;
-        }
-        if (result.first) {
-            if (p_ours >= p_GT) ++ChosenB_Mp;
-            else ++ChosenB_Lp;
-        }
-        if (guess.first || result.first) {
-            if (p_ours >= p_GT) ++ChosenC_Mp;
-            else ++ChosenC_Lp;
-        }
-    }
-    printf("all %d %d %.6lf\n", Mp, Lp, (double)Mp / (Mp + Lp));
-    printf("A:  %d %d %.6lf\n", ChosenA_Mp, ChosenA_Lp, (double)ChosenA_Mp / (ChosenA_Mp + ChosenA_Lp));
-    printf("B:  %d %d %.6lf\n", ChosenB_Mp, ChosenB_Lp, (double)ChosenB_Mp / (ChosenB_Mp + ChosenB_Lp));
-    printf("C:  %d %d %.6lf\n", ChosenC_Mp, ChosenC_Lp, (double)ChosenC_Mp / (ChosenC_Mp + ChosenC_Lp));
 
+        if (p_ours >= 0.4) ++pre;
+        else ++are_n, are_sum += (0.4 - p_ours) / 0.4;
+
+    }
+    printf("ours vs mean: %d %d %.6lf\n", Mp, Lp, (double)Mp / (Mp + Lp));
+    printf("ours: precision=%.6lf are=%.6lf %d\n", (double)pre / (Mp + Lp), (double)are_sum / are_n, are_n);
 }
 
 //17213472216328176400 
