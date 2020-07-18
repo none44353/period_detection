@@ -22,9 +22,9 @@ using namespace std;
 #include "detector.h"
 #include "detectorHG.h"
 
-//string datapath[60] = {"./130000.dat"};
+string datapath[60] = {"./130000.dat"};
 
-
+/*
 string datapath[60] = {"../../usr/share/dataset/CAIDA2018/dataset/130000.dat",
                 "../../usr/share/dataset/CAIDA2018/dataset/130100.dat",
                 "../../usr/share/dataset/CAIDA2018/dataset/130200.dat",
@@ -84,12 +84,12 @@ string datapath[60] = {"../../usr/share/dataset/CAIDA2018/dataset/130000.dat",
                 "../../usr/share/dataset/CAIDA2018/dataset/135600.dat", 
                 "../../usr/share/dataset/CAIDA2018/dataset/135700.dat",
                 "../../usr/share/dataset/CAIDA2018/dataset/135800.dat",
-                "../../usr/share/dataset/CAIDA2018/dataset/135900.dat"};
+                "../../usr/share/dataset/CAIDA2018/dataset/135900.dat"};*/
 
 ifstream fin;
 
-const int M = 2e7;
-
+const int M = 2e5;
+const double P = 0.8;
 const double unitTime = 0.001;
 
 pair <uint64_t, double> Read()//新CAIDA
@@ -133,60 +133,49 @@ pair <uint64_t, double> input[M + 7];
 
 bool check_near(double c, double x) {
     if (fabs(x - c) > Range * 2) return false;
-    return fabs(x - c) < delta * max(fabs(c), 0.001);
+    return fabs(x - c) <= delta * max(fabs(c), 0.001);
 }
 
-const double threshold = 1;
-const int P = 10;
-
 struct getGT{
-    map <uint64_t, double> sum;
-    map <uint64_t, double> sum2;
     map <uint64_t, int> count;
     map <uint64_t, set <double> > table;
+    
     void init() {
-        sum.clear();
-        sum2.clear();
         count.clear();
         table.clear();
     }
+
     void insert(uint64_t id, double key) {
-        if (sum.find(id) == sum.end()) 
-            sum[id] = sum2[id] = count[id] = 0, table[id].clear();
-        sum[id] += key, sum2[id] += key * key, count[id]++, table[id].insert(key);
+        if (count.find(id) == count.end()) 
+            count[id] = 0, table[id].clear();
+        count[id]++, table[id].insert(key);
     }
 
     pair <bool, double> query(const uint64_t& id) {
-        if (sum.find(id) == sum.end()) return make_pair(false, -1);
+        if (count.find(id) == count.end()) return make_pair(false, -1);
         int n = count[id]; 
         if (n < 10) return make_pair(false, -1);
-        int x = n / P; //去除最大最小P%元素 
-      //  x = 0;
-        double s = sum[id], s2 = sum2[id];
-  
-        set <double> :: iterator it = table[id].begin();
-        for (int i = 0; i < x; ++i) 
-            --n, s -= *it, s2 -= (*it) * (*it), ++it;
-        set <double> :: reverse_iterator rit = table[id].rbegin();
-        for (int i = 0; i < x; ++i)
-            --n, s -= *rit,s2 -= (*it) * (*it), ++rit;
-
-        double mn = *it, mx = *rit;
         
-        double mean = s / n;
-        /*
-        double std2 = (double)s2 / n - mean * mean;
-        double std = sqrt(std2);
-        double res = std / mean;*/
+        int x = n * P;
+        set <double> :: iterator itl = table[id].begin();
+        set <double> :: iterator itr = table[id].begin();
 
-       // printf("query %llu %d %.5lf %.5lf\n", id, n, mean, res);
+        for (int i = 1; i < x; ++i) ++itr;
+        for (; itr != table[id].end(); ++itl, ++itr) {
+            double xl = *itl;
+            double xr = *itr;
+            double c = xl / (1 - delta);
+          //  printf("check [%.6lf %.6lf] %.6lf\n", xl, xr, c);
+            if (c > 0.001) {
+                if (c * (1 + delta) >= xr) return make_pair(true, c);
+            }
+            else {
+                c = xl + 0.001 * delta;
+                if (c + 0.001 * delta >= xr) return make_pair(true, c);
+            }
+        }
 
-        //if (res <= threshold)
-          //  return make_pair(true, mean);
-
-        if (check_near(mean, mn) && check_near(mean, mx))
-            return make_pair(true, mean); 
-        return make_pair(false, mean);
+        return make_pair(false, -1);
     }
 
     double queryPercentage(const uint64_t& id, double c) {
@@ -211,6 +200,7 @@ void GroundTruth() {
         auto e = input[i]; 
 
         uint64_t id = e.first;
+       // if (id != 17213472216328176400ULL) continue;
         double curTime = e.second;
         double lastTime = 0;
         
@@ -220,10 +210,8 @@ void GroundTruth() {
             double st = 0;
             if (startTime.find(id) != startTime.end()) st = startTime[id]; 
 
-            if (counter[id] >= 5) {
-                intervalGT.insert(id, curTime - st);
-               // printf("insert %llu %.4lf\n", id, curTime - st);
-            }
+            if (counter[id] >= 5) intervalGT.insert(id, curTime - st);
+            
             counter[id] = 0;
             startTime[id] = curTime;
         }
@@ -238,27 +226,32 @@ void GroundTruth() {
         auto e = input[i]; 
         uint64_t id = e.first;
         
+       // if (id != 17019272071912997107ULL) continue;
+      //  if (id != 17213472216328176400ULL) continue;
         if (intervalAnswer.find(id) != intervalAnswer.end()) continue;
         pair <bool, double> result = intervalGT.query(id);
         intervalAnswer[id] = result;
+      //  printf("c %.6lf per %.6lf\n", result.second, intervalGT.queryPercentage(id, result.second));
     }
 }
 
-long double precision[2], recall[2], are[2];
+long double precision[2], recall[2], centre_precision[2];
 int cnt;
 
 
 void OURS() {
     bloomfliter* ntimeStamp = new bloomfliter(4, 32768); //t * M * 8 / 1024 = 1024KB
     bloomfliter* nstartTime = new bloomfliter(4, 32768); //t * M * 8 / 1024 = 1024KB
-    Alg* intervalDetector = new Alg(6400, 10, 0.2);  //L * 24 / 1024 = 150KB
-    AlgHG* HGDetector = new AlgHG(4, 1600, 10, 0.2);  //L * 24 / 1024 = 150KB
+    Alg* intervalDetector = new Alg(6400, 10, P);  //L * 24 / 1024 = 150KB
+    AlgHG* HGDetector = new AlgHG(4, 200000, 10, 0.4);  //L * 24 / 1024 = 150KB
 
     for (int i = 0; i < M; ++i) {
         auto e = input[i]; 
 
         uint64_t id = e.first;
-        //if (id != 17213472216328176400ULL) continue;
+        //if (id != 2051345630196722313ULL) continue;
+       // if (id != 17213472216328176400ULL) continue;
+      //  if (id != 17019272071912997107ULL) continue;
         double curTime = e.second;
         double lastTime = ntimeStamp -> query(id);
 
@@ -267,6 +260,7 @@ void OURS() {
             double st = nstartTime -> query(id);
 
             if (counter[id] >= 5) intervalDetector -> insert(id, curTime - st);
+           // if (counter[id] >= 5) printf("#%.6lf\n", curTime - st);
             if (counter[id] >= 5) HGDetector -> insert(id, curTime - st);
             counter[id] = 0;
             nstartTime -> insert(id, curTime);
@@ -277,13 +271,15 @@ void OURS() {
         ntimeStamp -> insert(id, curTime);
     }
 
+/*
+17019272071912997107
+14973527361033788018
+14553577667936389904*/
     check.clear();
-    int Mp = 0, Lp = 0;
-    int pre = 0, are_n = 0;
-    double are_sum = 0;
-    for (int i = 0; i < M; ++i){
+    for (int i = 0; i < M; ++i) {
         auto e = input[i]; 
         uint64_t id = e.first;
+       // if (id != 17019272071912997107ULL) continue;
         
         if (check.find(id) != check.end()) continue;
         check[id] = true; ++cnt;
@@ -291,31 +287,22 @@ void OURS() {
         pair <bool, double> result = intervalAnswer[id];
         if (guess.first) {
             precision[1]++;
+          //  printf("%llu\n", id);
             if (result.first) precision[0]++;           
         }
 
         if (result.first) {
             recall[1]++;
             if (guess.first) recall[0]++;
+           // else printf("%llu\n", id);
         }
 
         if (guess.first && result.first) {
-            are[1]++;
-            are[0] += fabs(guess.second - result.second) / result.second;
+            double p = intervalGT.queryPercentage(id, guess.second);
+            centre_precision[1]++;
+            centre_precision[0] += (p >= P ? 1 : 0);
         }
-
-        if (!guess.first) continue;
-        double p_ours = intervalGT.queryPercentage(id, guess.second);
-        double p_GT = intervalGT.queryPercentage(id, result.second);
-        if (p_ours >= p_GT) ++Mp;
-        else ++Lp;
-
-        if (p_ours >= 0.4) ++pre;
-        else ++are_n, are_sum += (0.4 - p_ours) / 0.4;
-
     }
-    printf("ours vs mean: %d %d %.6lf\n", Mp, Lp, (double)Mp / (Mp + Lp));
-    printf("ours: precision=%.6lf are=%.6lf %d\n", (double)pre / (Mp + Lp), (double)are_sum / are_n, are_n);
 }
 
 //17213472216328176400 
@@ -328,7 +315,7 @@ int main() {
     printf("%d\n", cnt);
     printf("precision %.lf %.6lf\n", (double)precision[1], (double)(precision[0] / precision[1]));
     printf("recall %.lf %.6lf\n", (double)recall[1], (double)(recall[0] / recall[1]));
-    printf("are %.lf %.6lf\n", (double)are[1], (double)(are[0] / are[1]));
+    printf("centre_precision %.lf %.6lf\n", (double)centre_precision[1], (double)(centre_precision[0] / centre_precision[1]));
 
 	return 0;
 }

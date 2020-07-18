@@ -54,6 +54,7 @@ class AlgHG //基于CMsketch的版本
                 ++counter[i];
             }
             else --counter[i];
+          //  printf("#%.6lf cnt=%d total=%d var=%.6lf\n", x, counter[i], total[i], var[i]);
             return;
         } 
         
@@ -77,11 +78,12 @@ class AlgHG //基于CMsketch的版本
         int nl = pos * t, nr = (pos + 1) * t, cnt;
         
         for (int i = nl; i < nr; ++i) if ((cnt = counter[i]) && id[i] == s) {
+            if (total[i] < LowerBound) continue;
             double p = (double)cnt / total[i];
             return make_pair(p >= percentage, var[i]);
         } 
 
-        return make_pair(false, 0);
+        return make_pair(false, -1);
     }
 };
 #endif
